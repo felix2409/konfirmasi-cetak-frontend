@@ -31,7 +31,7 @@
         .btn-success:hover { background-color: #15803d; }
         
         /* Layout Sections */
-        #step-2, #step-3 { display: none; }
+        #step-1, #step-2, #step-3 { display: none; }
         
         .cart-item { border: 1px solid var(--border); padding: 15px; margin-bottom: 10px; border-radius: 5px; background: #f1f5f9; }
         .cart-item h4 { margin-top: 0; color: var(--primary); }
@@ -44,7 +44,6 @@
 <body>
 
 <div class="container">
-    <!-- STEP 1: Info Utama -->
     <div id="step-1">
         <h2>Data Antrean & Operator</h2>
         <div class="form-group">
@@ -62,7 +61,6 @@
         <button onclick="goToStep2()">Mulai Isi Pesanan</button>
     </div>
 
-    <!-- STEP 2: Kategori & Form -->
     <div id="step-2">
         <h2>Tambah Detail Cetak</h2>
         <div class="form-group">
@@ -72,14 +70,8 @@
                 <option value="File Biasa">1. File Biasa</option>
                 <option value="Stiker Kisscut dan Art Paper Diecut">2. Stiker Kisscut & AP Diecut</option>
                 <option value="Buku Lakban">3. Buku Lakban</option>
-                <option value="Buku Jepret Tengah">4. Buku Jepret Tengah</option>
-                <option value="Buku Softcover">5. Buku Softcover</option>
-                <option value="Buku Hardcover">6. Buku Hardcover</option>
-                <option value="ID Card">7. Id Card</option>
                 <option value="Kartu Nama">8. Kartu Nama</option>
-                <option value="Hard Spiral">9. Hard Spiral</option>
-                <option value="Cover Tebal">10. Cover Tebal</option>
-            </select>
+                </select>
         </div>
 
         <div id="dynamicFormArea"></div>
@@ -88,28 +80,26 @@
             <h3>Pesanan Saat Ini:</h3>
             <div id="orderList"><i>Belum ada pesanan yang ditambahkan.</i></div>
             
-            <button class="btn-success" onclick="goToStep3()">All Done (Buat Link Konfirmasi)</button>
+            <button class="btn-success" id="btnAllDone" onclick="goToStep3()">All Done (Buat Link Konfirmasi)</button>
         </div>
     </div>
 
-    <!-- STEP 3: Halaman Konfirmasi (Dilihat Customer) -->
     <div id="step-3">
         <div class="confirmation-box">
             <h2 style="border:none; margin-top:0; color:#15803d; text-align:center;">Konfirmasi Pesanan</h2>
-            <p class="disclaimer" id="disclaimerText"></p>
+            <p class="disclaimer" id="disclaimerText">Memuat data pesanan...</p>
             
             <div id="finalOrderDetails"></div>
 
-            <button class="btn-success" onclick="alert('Pesanan disetujui! Status dapat diupdate ke database.')">Oke, Saya Setujui</button>
+            <button class="btn-success" id="btnSetuju" onclick="alert('Pesanan disetujui! (Fitur update status segera hadir)')">Oke, Saya Setujui</button>
         </div>
-        <button id="btnCopyLink" class="btn-secondary" onclick="copyLink()">Copy Link untuk Customer</button>
+        <button id="btnCopyLink" class="btn-secondary" onclick="copyLink()" style="display:none;">Copy Link untuk Customer</button>
     </div>
 </div>
 
 <script>
     let globalOrders = [];
     
-    // Struktur Data Form
     const formConfig = {
         "File Biasa": [
             { id: "file_biasa", label: "Nama File / Screenshoot file", type: "image" },
@@ -156,7 +146,50 @@
         ]
     };
 
-    // Fungsi Navigasi
+    // ==========================================
+    // DETEKSI OTOMATIS: OPERATOR ATAU CUSTOMER?
+    // ==========================================
+    window.onload = async function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const orderId = urlParams.get('id');
+
+        if(orderId) {
+            // JIKA ADA ID (Ini tampilan untuk Customer)
+            document.getElementById('step-3').style.display = 'block';
+            document.getElementById('btnCopyLink').style.display = 'none'; // Sembunyikan tombol copy
+
+            try {
+                // Ambil data dari Vercel
+                const response = await fetch(`https://konfirmasi-cetak-backend.vercel.app/api/getOrder?id=${orderId}`);
+                const result = await response.json();
+
+                if(result.success) {
+                    document.getElementById('disclaimerText').innerText = "Silakan periksa kembali detail pesanan Anda. Jika ada kesalahan setelah disetujui, kami tidak dapat mengganti pesanan.";
+                    
+                    let finalHtml = '';
+                    result.data.forEach((order, idx) => {
+                        finalHtml += `<div class="cart-item"><h4>${idx + 1}. ${order.category}</h4><table style="width:100%; border-collapse: collapse;">`;
+                        order.details.forEach(det => {
+                            finalHtml += `<tr><td style="padding: 5px; width: 40%; font-weight: 500; vertical-align: top;">${det.label}</td><td style="padding: 5px; vertical-align: top;">: ${det.value}</td></tr>`;
+                        });
+                        finalHtml += `</table></div>`;
+                    });
+                    document.getElementById('finalOrderDetails').innerHTML = finalHtml;
+                } else {
+                    document.getElementById('disclaimerText').innerText = "Data pesanan tidak ditemukan atau link tidak valid.";
+                    document.getElementById('btnSetuju').style.display = 'none';
+                }
+            } catch (error) {
+                document.getElementById('disclaimerText').innerText = "Gagal terhubung ke server.";
+            }
+
+        } else {
+            // JIKA TIDAK ADA ID (Ini tampilan awal untuk Operator)
+            document.getElementById('step-1').style.display = 'block';
+        }
+    };
+    // ==========================================
+
     function goToStep2() {
         if(!document.getElementById('opName').value || !document.getElementById('queueNum').value || !document.getElementById('custName').value){
             alert("Harap isi Nama Operator, Nomor Antrean, dan Nama Customer!");
@@ -171,17 +204,13 @@
         const area = document.getElementById('dynamicFormArea');
         area.innerHTML = ''; 
 
-        if (!category || !formConfig[category]) {
-            area.innerHTML = '<p style="color:red;">Format kategori belum diset up di kodingan.</p>';
-            return;
-        }
+        if (!category || !formConfig[category]) return;
 
         const fields = formConfig[category];
         let html = `<h3>Form ${category}</h3><div id="currentForm">`;
 
         fields.forEach(field => {
             html += `<div class="form-group"><label>${field.label}</label>`;
-            
             if (field.type === 'text') {
                 html += `<input type="text" id="${field.id}">`;
             } else if (field.type === 'select') {
@@ -195,12 +224,10 @@
             }
             html += `</div>`;
         });
-
         html += `<button type="button" onclick="addToOrder('${category}')">Simpan & Tambah Kategori Lain</button></div>`;
         area.innerHTML = html;
     }
 
-    // Handle Image Paste
     function handlePaste(e, divId) {
         e.preventDefault();
         const items = (e.clipboardData || e.originalEvent.clipboardData).items;
@@ -223,7 +250,6 @@
         }
     }
 
-    // Menyimpan form yang aktif ke dalam list order
     function addToOrder(category) {
         const fields = formConfig[category];
         let orderData = { category: category, details: [] };
@@ -241,7 +267,6 @@
 
         globalOrders.push(orderData);
         updateOrderList();
-        
         document.getElementById('categorySelect').value = "";
         document.getElementById('dynamicFormArea').innerHTML = "";
     }
@@ -249,16 +274,11 @@
     function updateOrderList() {
         const listArea = document.getElementById('orderList');
         if (globalOrders.length === 0) return;
-        
         listArea.innerHTML = globalOrders.map((order, index) => {
-            return `<div class="cart-item">
-                <h4>${index + 1}. ${order.category}</h4>
-                <p>Data tersimpan. Siap dilampirkan pada konfirmasi akhir.</p>
-            </div>`;
+            return `<div class="cart-item"><h4>${index + 1}. ${order.category}</h4><p>Data tersimpan.</p></div>`;
         }).join('');
     }
 
-    // Step 3: Kirim ke Backend Vercel dan Generate Link
     async function goToStep3() {
         if(globalOrders.length === 0) {
             alert("Belum ada file pesanan yang diinput!");
@@ -269,8 +289,7 @@
         const queueNum = document.getElementById('queueNum').value;
         const custName = document.getElementById('custName').value;
 
-        // Ubah teks tombol saat loading
-        const btnSubmit = document.querySelector('#step-2 .btn-success');
+        const btnSubmit = document.getElementById('btnAllDone');
         const originalText = btnSubmit.innerText;
         btnSubmit.innerText = "Membuat Link... Mohon Tunggu";
         btnSubmit.disabled = true;
@@ -283,7 +302,6 @@
         };
 
         try {
-            // URL API Vercel
             const response = await fetch('https://konfirmasi-cetak-backend.vercel.app/api/saveOrder', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -307,9 +325,11 @@
 
                 document.getElementById('finalOrderDetails').innerHTML = finalHtml;
                 
-                // URL Frontend GitHub Pages + ID Vercel
                 const uniqueUrl = `https://felix2409.github.io/konfirmasi-cetak-frontend/?id=${result.orderId}`;
-                document.getElementById('btnCopyLink').dataset.url = uniqueUrl;
+                
+                const btnCopy = document.getElementById('btnCopyLink');
+                btnCopy.dataset.url = uniqueUrl;
+                btnCopy.style.display = 'inline-block'; // Tampilkan tombol copy untuk operator
 
                 document.getElementById('step-2').style.display = 'none';
                 document.getElementById('step-3').style.display = 'block';
@@ -325,7 +345,6 @@
         }
     }
 
-    // Fungsi untuk menyalin link ke clipboard
     function copyLink() {
         const url = document.getElementById('btnCopyLink').dataset.url;
         if(url) {
@@ -334,8 +353,6 @@
             }).catch(err => {
                 alert("Gagal menyalin link. Silakan copy manual: " + url);
             });
-        } else {
-            alert("URL belum siap.");
         }
     }
 </script>
