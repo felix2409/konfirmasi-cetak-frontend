@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Konfirmasi Pesanan Cetak</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --bg: #f8fafc;
+            --border: #cbd5e1;
+            --text: #334155;
+        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg); color: var(--text); padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        h2 { border-bottom: 2px solid var(--primary); padding-bottom: 10px; margin-bottom: 20px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: 600; }
+        input[type="text"], input[type="number"], select, textarea { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 5px; box-sizing: border-box; }
+        
+        /* Area Paste Gambar */
+        .paste-area { border: 2px dashed var(--primary); padding: 20px; text-align: center; border-radius: 5px; cursor: text; min-height: 100px; background: #eff6ff; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .paste-area:focus { outline: none; border-style: solid; }
+        .paste-area img { max-width: 100%; max-height: 200px; margin-top: 10px; border-radius: 5px; border: 1px solid #ccc; }
+        
+        button { background-color: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 10px; }
+        button:hover { background-color: #1d4ed8; }
+        .btn-secondary { background-color: #64748b; }
+        .btn-secondary:hover { background-color: #475569; }
+        .btn-success { background-color: #16a34a; width: 100%; font-size: 16px; padding: 15px; margin-top: 20px;}
+        .btn-success:hover { background-color: #15803d; }
+        
+        /* Layout Sections */
+        #step-2, #step-3 { display: none; }
+        
+        .cart-item { border: 1px solid var(--border); padding: 15px; margin-bottom: 10px; border-radius: 5px; background: #f1f5f9; }
+        .cart-item h4 { margin-top: 0; color: var(--primary); }
+        
+        /* Tampilan Konfirmasi Customer */
+        .confirmation-box { border: 2px solid #22c55e; padding: 20px; border-radius: 10px; background: #f0fdf4; margin-bottom: 20px; }
+        .disclaimer { font-weight: bold; margin-bottom: 20px; line-height: 1.6; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="step-1">
+        <h2>Data Antrean & Operator</h2>
+        <div class="form-group">
+            <label>Nama Operator</label>
+            <input type="text" id="opName" placeholder="Contoh: Ayu / Alfi">
+        </div>
+        <div class="form-group">
+            <label>Nomor Antrean</label>
+            <input type="text" id="queueNum" placeholder="Contoh: D3145">
+        </div>
+        <div class="form-group">
+            <label>Atas Nama Customer</label>
+            <input type="text" id="custName" placeholder="Masukkan nama customer">
+        </div>
+        <button onclick="goToStep2()">Mulai Isi Pesanan</button>
+    </div>
+
+    <div id="step-2">
+        <h2>Tambah Detail Cetak</h2>
+        <div class="form-group">
+            <label>Pilih Kategori Cetak:</label>
+            <select id="categorySelect" onchange="renderForm()">
+                <option value="">-- Pilih Kategori --</option>
+                <option value="File Biasa">1. File Biasa</option>
+                <option value="Stiker Kisscut dan Art Paper Diecut">2. Stiker Kisscut & AP Diecut</option>
+                <option value="Buku Lakban">3. Buku Lakban</option>
+                <option value="Buku Jepret Tengah">4. Buku Jepret Tengah</option>
+                <option value="Buku Softcover">5. Buku Softcover</option>
+                <option value="Buku Hardcover">6. Buku Hardcover</option>
+                <option value="ID Card">7. Id Card</option>
+                <option value="Kartu Nama">8. Kartu Nama</option>
+                <option value="Hard Spiral">9. Hard Spiral</option>
+                <option value="Cover Tebal">10. Cover Tebal</option>
+            </select>
+        </div>
+
+        <div id="dynamicFormArea"></div>
+
+        <div style="margin-top: 20px; padding-top: 20px; border-top: 2px dashed var(--border);">
+            <h3>Pesanan Saat Ini:</h3>
+            <div id="orderList"><i>Belum ada pesanan yang ditambahkan.</i></div>
+            
+            <button class="btn-success" onclick="goToStep3()">All Done (Buat Link Konfirmasi)</button>
+        </div>
+    </div>
+
+    <div id="step-3">
+        <div class="confirmation-box">
+            <h2 style="border:none; margin-top:0; color:#15803d; text-align:center;">Konfirmasi Pesanan</h2>
+            <p class="disclaimer" id="disclaimerText"></p>
+            
+            <div id="finalOrderDetails"></div>
+
+            <button class="btn-success" onclick="alert('Pesanan disetujui! Status dapat diupdate ke database.')">Oke, Saya Setujui</button>
+        </div>
+        <button class="btn-secondary" onclick="alert('Link berhasil di-copy! (Integrasikan dengan backend untuk URL unik)')">Copy Link untuk Customer</button>
+    </div>
+</div>
+
+<script>
+    let globalOrders = [];
+    
+    // Struktur Data Form (Merubah pertanyaan "atau" dan "/" menjadi Dropdown)
+    const formConfig = {
+        "File Biasa": [
+            { id: "file_biasa", label: "Nama File / Screenshoot file", type: "image" },
+            { id: "ukuran", label: "Ukuran file", type: "text" },
+            { id: "total", label: "Total cetak ada berapa pcs", type: "text" },
+            { id: "sisi", label: "Sisi Cetak", type: "select", options: ["1 Sisi", "Bolak Balik"] },
+            { id: "lembar", label: "Total cetak berapa lembar A3", type: "text" },
+            { id: "bahan", label: "Bahan kertas apa", type: "text" },
+            { id: "laminasi", label: "Pakai laminasi", type: "select", options: ["Tidak Pakai", "Pakai Laminasi Glossy", "Pakai Laminasi Doff"] },
+            { id: "potong", label: "Dipotong bagaimana", type: "text" },
+            { id: "plastik", label: "Pakai plastik", type: "select", options: ["Ya, Pakai Plastik", "Tidak"] },
+            { id: "estimasi", label: "Estimasi proses", type: "text" },
+            { id: "catatan", label: "Catatan khusus", type: "textarea" }
+        ],
+        "Stiker Kisscut dan Art Paper Diecut": [
+            { id: "file_stiker", label: "Nama File / Screenshoot layout", type: "image" },
+            { id: "muat", label: "1 lembar muat berapa pcs", type: "text" },
+            { id: "lembar_stiker", label: "Cetak berapa lembar A3", type: "text" },
+            { id: "cutting", label: "Pakai cutting", type: "select", options: ["Ya, Pakai Cutting", "Tidak"] },
+            { id: "laminasi_stiker", label: "Pakai laminasi", type: "select", options: ["Tidak", "Glossy", "Doff"] },
+            { id: "plastik_stiker", label: "Pakai plastik", type: "select", options: ["Ya", "Tidak"] },
+            { id: "estimasi_stiker", label: "Estimasi proses", type: "text" },
+            { id: "catatan_stiker", label: "Catatan khusus", type: "textarea" }
+        ],
+        "Buku Lakban": [
+            { id: "file_lakban", label: "Nama File / Screenshoot file", type: "image" },
+            { id: "ukuran_lakban", label: "Ukuran buku", type: "text" },
+            { id: "sisi_lakban", label: "Sisi Cetak", type: "select", options: ["1 Sisi", "Bolak Balik"] },
+            { id: "mika", label: "Pakai mika", type: "select", options: ["Depan dan Belakang", "Depan Saja", "Tidak Pakai"] },
+            { id: "buffalo", label: "Pakai buffalo dibelakang", type: "select", options: ["Ya", "Tidak"] },
+            { id: "total_lakban", label: "Total cetak berapa buku", type: "text" },
+            { id: "plastik_lakban", label: "Pakai plastik", type: "select", options: ["Ya", "Tidak"] },
+            { id: "estimasi_lakban", label: "Estimasi proses", type: "text" },
+            { id: "catatan_lakban", label: "Catatan khusus", type: "textarea" }
+        ],
+        "Kartu Nama": [
+            { id: "file_kartu", label: "Nama File / Screenshoot file", type: "image" },
+            { id: "bahan_kartu", label: "Bahan kertas", type: "text" },
+            { id: "total_box", label: "Total cetak berapa box", type: "text" },
+            { id: "sisi_kartu", label: "Sisi Cetak", type: "select", options: ["1 Sisi", "Bolak Balik"] },
+            { id: "kotak", label: "Pakai kotak", type: "select", options: ["Ya, Pakai Kotak", "Tidak Pakai"] },
+            { id: "estimasi_kartu", label: "Estimasi proses", type: "text" },
+            { id: "catatan_kartu", label: "Catatan khusus", type: "textarea" }
+        ]
+        // Kategori lain (4, 5, 6, 7, 9, 10) dikonfigurasi dengan format yang sama
+    };
+
+    // Fungsi Navigasi
+    function goToStep2() {
+        if(!document.getElementById('opName').value || !document.getElementById('queueNum').value || !document.getElementById('custName').value){
+            alert("Harap isi Nama Operator, Nomor Antrean, dan Nama Customer!");
+            return;
+        }
+        document.getElementById('step-1').style.display = 'none';
+        document.getElementById('step-2').style.display = 'block';
+    }
+
+    function renderForm() {
+        const category = document.getElementById('categorySelect').value;
+        const area = document.getElementById('dynamicFormArea');
+        area.innerHTML = ''; 
+
+        if (!category || !formConfig[category]) return;
+
+        const fields = formConfig[category];
+        let html = `<h3>Form ${category}</h3><div id="currentForm">`;
+
+        fields.forEach(field => {
+            html += `<div class="form-group"><label>${field.label}</label>`;
+            
+            if (field.type === 'text') {
+                html += `<input type="text" id="${field.id}">`;
+            } else if (field.type === 'select') {
+                html += `<select id="${field.id}">`;
+                field.options.forEach(opt => html += `<option value="${opt}">${opt}</option>`);
+                html += `</select>`;
+            } else if (field.type === 'textarea') {
+                html += `<textarea id="${field.id}" rows="3"></textarea>`;
+            } else if (field.type === 'image') {
+                // Area Paste
+                html += `<div class="paste-area" contenteditable="true" id="${field.id}" data-type="image" onpaste="handlePaste(event, '${field.id}')">Klik disini, lalu tekan Ctrl+V untuk Paste Screenshot</div>`;
+            }
+            html += `</div>`;
+        });
+
+        html += `<button type="button" onclick="addToOrder('${category}')">Simpan & Tambah Kategori Lain</button></div>`;
+        area.innerHTML = html;
+    }
+
+    // Handle Image Paste
+    function handlePaste(e, divId) {
+        e.preventDefault();
+        const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        for (let index in items) {
+            const item = items[index];
+            if (item.kind === 'file') {
+                const blob = item.getAsFile();
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const div = document.getElementById(divId);
+                    div.innerHTML = `<img src="${event.target.result}" />`;
+                    div.dataset.imagedata = event.target.result; 
+                };
+                reader.readAsDataURL(blob);
+            } else if (item.kind === 'string') {
+                item.getAsString(function (s){
+                    document.getElementById(divId).innerText = s;
+                });
+            }
+        }
+    }
+
+    // Menyimpan form yang aktif ke dalam list order
+    function addToOrder(category) {
+        const fields = formConfig[category];
+        let orderData = { category: category, details: [] };
+
+        fields.forEach(field => {
+            let val = "";
+            const el = document.getElementById(field.id);
+            if(field.type === 'image'){
+                val = el.dataset.imagedata ? `<img src="${el.dataset.imagedata}" style="max-height:100px; display:block; margin-top:5px;">` : el.innerText;
+            } else {
+                val = el.value;
+            }
+            orderData.details.push({ label: field.label, value: val });
+        });
+
+        globalOrders.push(orderData);
+        updateOrderList();
+        
+        // Reset form
+        document.getElementById('categorySelect').value = "";
+        document.getElementById('dynamicFormArea').innerHTML = "";
+    }
+
+    function updateOrderList() {
+        const listArea = document.getElementById('orderList');
+        if (globalOrders.length === 0) return;
+        
+        listArea.innerHTML = globalOrders.map((order, index) => {
+            return `<div class="cart-item">
+                <h4>${index + 1}. ${order.category}</h4>
+                <p>Data tersimpan. Siap dilampirkan pada konfirmasi akhir.</p>
+            </div>`;
+        }).join('');
+    }
+
+    // Step 3: Tampilkan Kesimpulan
+    function goToStep3() {
+        if(globalOrders.length === 0) {
+            alert("Belum ada file pesanan yang diinput!");
+            return;
+        }
+
+        const opName = document.getElementById('opName').value;
+        const queueNum = document.getElementById('queueNum').value;
+        const custName = document.getElementById('custName').value;
+
+        // Susun disclaimer
+        const disclaimer = `Dengan ini saya operator ${opName} yang menangani antrean ${queueNum} atas nama ${custName} mengkonfirmasi bahwa file cetakan di bawah ini sudah sesuai dengan keinginan customer. Jika ada kesalahan di dalam konfirmasi yang sudah dibaca dan disetujui, kami tidak bisa mengganti.`;
+        document.getElementById('disclaimerText').innerText = disclaimer;
+
+        // Susun detail
+        let finalHtml = '';
+        globalOrders.forEach((order, idx) => {
+            finalHtml += `<div class="cart-item"><h4>${idx + 1}. ${order.category}</h4><table style="width:100%; border-collapse: collapse;">`;
+            order.details.forEach(det => {
+                finalHtml += `<tr><td style="padding: 5px; width: 40%; font-weight: 500; vertical-align: top;">${det.label}</td><td style="padding: 5px; vertical-align: top;">: ${det.value}</td></tr>`;
+            });
+            finalHtml += `</table></div>`;
+        });
+
+        document.getElementById('finalOrderDetails').innerHTML = finalHtml;
+        
+        document.getElementById('step-2').style.display = 'none';
+        document.getElementById('step-3').style.display = 'block';
+    }
+</script>
+</body>
+</html>
